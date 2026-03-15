@@ -1,0 +1,7 @@
+google-adk
+google-genai
+python-dotenv
+pydantic
+sqlalchemy
+aiosqlite
+pyaudio

@@ -1,0 +1,42 @@
+Aura (SupervisorAgent)
+│   # Logic: Uses Gemini 3.1 Pro (thinking_level: high) for routing.
+│
+├── 00_INGESTION_SYSTEM (Service Layer)
+│   # Tech: Runs as a background asyncio task outside the main agent loop.
+│   └── Tool: stream_wearable_data() -> Updates global state: state.vitals.hr, state.vitals.spo2
+│
+├── 01_EMERGENCY_BRANCH (SequentialAgent)
+│   # Trigger: state.vitals.critical_spike == True
+│   ├── VERIFIER (LlmAgent) -> Tool: send_watch_vibration()
+│   └── RESPONDER (LlmAgent) -> Tool: notify_emergency_services(coords, data)
+│
+├── 02_MORNING_PIPELINE (SequentialAgent)
+│   ├── FETCH_DATA (ParallelAgent)
+│   │   ├── Sleep_Agent
+│   │   ├── Vitals_Agent
+│   │   └── Calendar_Agent
+│   └── PLANNER (LlmAgent) -> "Good morning. Sleep: 62%. Stress is high. 2 meetings moved."
+│
+└── 03_WELLNESS_LIFECYCLE (LoopAgent)
+│   # Tech: Multimodal Live API (Low-latency Audio)
+│    ├── TRIAGE (LlmAgent) -> "User sounds tired, heart rate is 110. Handing off to Stress_Coach."
+│    └── STRESS_COACH (LlmAgent) -> Role: Live guided breathing + Affective Dialog.
+└──04_NIGHT_STRATEGIST (SequentialAgent)  ... [21:00 - 23:00]
+    │   # Role: Preparing the body & mind for optimal recovery.
+    │
+    ├── ENVIRONMENT_TUNER (LlmAgent)
+    │   # Tool: sync_smart_home() 
+    │   # Action: Dims lights to warm spectrum, sets thermostat to 18°C.
+    │
+    ├── BIOMETRIC_EVENING_SCAN (LlmAgent)
+    │   # Tool: get_daily_exertion()
+    │   # Logic: If 'Activity High' -> Suggest magnesium or longer stretching.
+    │
+    ├── COGNITIVE_OFFLOAD (LlmAgent)
+    │   # Role: The Journaling Agent. 
+    │   # Action: Uses "Affective Dialog" to ask: "What's one thing you're 
+    │   # carrying today that we can leave here?"
+    │
+    └── SLEEP_HYGIENE_FINAL (LlmAgent)
+        # Role: Final instruction for the user (e.g., "Phone away now.")
+        # Tool: set_do_not_disturb()
