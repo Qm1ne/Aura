@@ -1,31 +1,29 @@
-from google.adk.agents import LlmAgent, SequentialAgent
+from google.adk.agents import LlmAgent
 from google.genai import types
+from emergency import create_emergency_agent
 
-# Shared no-thinking config for all live agents
+# Standard no-thinking config
 _NO_THINK = types.GenerateContentConfig(
     thinking_config=types.ThinkingConfig(thinking_budget=0)
 )
 
-# TRIAGE
-triage = LlmAgent(
-    name="Triage",
-    instruction="Analyze the user's voice and biometrics. If they sound tired or stressed, decide if they need the Stress Coach.",
-    generate_content_config=_NO_THINK,
-    model="gemini-2.5-flash-native-audio-latest"
-)
-
-# STRESS_COACH
-stress_coach = LlmAgent(
-    name="Stress_Coach",
-    instruction="Conduct live guided breathing exercises. Use an affective, calm tone.",
-    generate_content_config=_NO_THINK,
-    model="gemini-2.5-flash-native-audio-latest"
-)
-
-# 03_WELLNESS_LIFECYCLE (SequentialAgent)
-# Replaced LoopAgent with SequentialAgent for compatibility with Voice/Live mode
-wellness_lifecycle = SequentialAgent(
+wellness_lifecycle = LlmAgent(
     name="Wellness_Lifecycle",
     description="Real-time wellness monitoring and stress management.",
-    sub_agents=[triage, stress_coach]
+    instruction="""You are Aura's calm wellness coach. Your job is to guide the user through breathing and stress relief.
+
+    ## EMERGENCY OVERRIDE (HIGHEST PRIORITY):
+    At EVERY turn, before doing ANYTHING else, check if the user said anything suggesting:
+    emergency, heart attack, chest pain, stroke, help, call 911, can't breathe (in distress), collapse.
+    If YES → IMMEDIATELY transfer to 'Emergency_Branch'. Do NOT finish the exercise. Stop mid-sentence if needed.
+
+    ## WELLNESS FLOW:
+    1. Briefly acknowledge the user's stress (1 sentence).
+    2. Lead a calm 4-7-8 breathing exercise: inhale 4s, hold 7s, exhale 8s. Guide 3 rounds.
+    3. After completing, ask how they feel and hand control back to Aura with a warm sign-off.
+
+    Keep your tone soft, warm, and unhurried. Pause naturally between instructions.""",
+    sub_agents=[create_emergency_agent()],
+    generate_content_config=_NO_THINK,
+    model="gemini-2.5-flash-native-audio-latest"
 )
