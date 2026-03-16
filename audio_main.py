@@ -24,8 +24,8 @@ MODEL_ID = "gemini-2.5-flash-native-audio-latest"
 CHUNK_SIZE = 960            # 30ms @ 16kHz
 FORMAT = pyaudio.paInt16    # 16-bit PCM
 CHANNELS = 1                # Mono
-INPUT_RATE = 16000         # Mic input
-OUTPUT_RATE = 24000        # AI Voice output (HD voices are 24kHz)
+INPUT_RATE = 16000          # Mic input
+OUTPUT_RATE = 24000         # AI Voice output (HD voices are 24kHz)
 
 class AudioInterface:
     def __init__(self):
@@ -34,7 +34,9 @@ class AudioInterface:
         self.output_stream = None
         self.is_running = False
         self.play_queue = queue.Queue()
+        self.send_queue = queue.Queue()   # Dedicated send queue
         self.play_thread = None
+        self.send_thread = None           # Dedicated send thread
 
     def _play_worker(self):
         """Threaded playback worker for non-blocking local audio."""
@@ -46,10 +48,24 @@ class AudioInterface:
             except queue.Empty:
                 continue
 
+    def _send_worker(self, queue_obj):
+        """Dedicated thread for sending audio to API — keeps callback non-blocking."""
+        while self.is_running:
+            try:
+                chunk = self.send_queue.get(timeout=0.1)
+                queue_obj.send_realtime(types.Blob(data=chunk, mime_type="audio/pcm"))
+            except queue.Empty:
+                continue
+
     def start(self, request_queue: LiveRequestQueue):
         self.is_running = True
         self.play_thread = threading.Thread(target=self._play_worker, daemon=True)
+        self.send_thread = threading.Thread(
+            target=self._send_worker,
+            args=(request_queue,), daemon=True
+        )
         self.play_thread.start()
+        self.send_thread.start()
 
         self.input_stream = self.p.open(
             format=FORMAT, channels=CHANNELS, rate=INPUT_RATE, input=True,
@@ -63,7 +79,7 @@ class AudioInterface:
     def _input_callback(self, queue_obj):
         def callback(in_data, frame_count, time_info, status):
             if self.is_running:
-                queue_obj.send_realtime(types.Blob(data=in_data, mime_type="audio/pcm"))
+                self.send_queue.put_nowait(in_data)   # Just queue it, never blocks
             return (None, pyaudio.paContinue)
         return callback
 
@@ -74,6 +90,8 @@ class AudioInterface:
         self.is_running = False
         if self.play_thread:
             self.play_thread.join(timeout=1.0)
+        if self.send_thread:
+            self.send_thread.join(timeout=1.0)
         if self.input_stream:
             self.input_stream.stop_stream()
             self.input_stream.close()
